@@ -1,6 +1,6 @@
 ------
 #Creator: Samrudh 
-**-https://huggingface.co/spaces/samrudh-nux/my-healthcare-ev4u 
+-https://huggingface.co/spaces/samrudh-nux/my-healthcare-ev4u 
 ---
 title: ClinicalTriageEnv
 emoji: 🏥
@@ -22,7 +22,7 @@ pinned: false
 
 ## 🎯 Why This Environment?
 
-Clinical decision-making is one of the highest-stakes reasoning tasks humans perform. Medical errors cause **250,000+ deaths annually** in the US alone. Yet there is **no standardised RL training environment** for evaluating AI agents on real clinical judgment tasks.
+Clinical decision-making is one of the highest-stakes reasoning tasks humans perform. Medical errors cause **5 million + deaths annually** in the India alone. Yet there is **no standardised RL training environment** for evaluating AI agents on real clinical judgment tasks.
 
 ClinicalTriageEnv fills this gap by simulating three tasks that physicians and nurses perform daily:
 
