@@ -2,14 +2,6 @@
 #Creator: Samrudh 
 -https://huggingface.co/spaces/samrudh-nux/my-healthcare-ev4u 
 ---
-title: ClinicalTriageEnv
-emoji: 🏥
-colorFrom: blue
-colorTo: green
-sdk: docker
-app_file: app.py
-pinned: false
----
 # 🏥 ClinicalTriageEnv
 
 **OpenEnv-compatible healthcare AI training environment for clinical decision-making agents.**
