@@ -32,7 +32,7 @@ Unlike toy environments, every scenario is grounded in actual clinical guideline
 - **Medication safety** tests CYP450 pharmacokinetics, contraindications, and polypharmacy risks
 - **Sepsis management** enforces the Surviving Sepsis Campaign 2021 Hour-1 Bundle
 
-The environment is designed for the **OpenEnv Hackathon 2025** and serves as both a training ground for clinical AI agents and a live demonstration dashboard for human learners.
+The environment is designed for the **meta x scaler OpenEnv Hackathon 2026** and serves as both a training ground for clinical AI agents and a live demonstration dashboard for human learners.
 
 ---
 
