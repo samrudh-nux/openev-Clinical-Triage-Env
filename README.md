@@ -21,7 +21,7 @@ Creator : SAMRUDH
 
 # 🏥 ClinicalTriageEnv
 
-### *The First Open Reinforcement Learning Environment for Clinical AI Safety*
+### *An Open Reinforcement Learning Environment for Clinical AI Safety*
 
 **Train · Evaluate · Benchmark · Deploy** clinical AI agents on life-critical emergency medicine scenarios — with real-time multi-agent reasoning, mortality risk scoring, and full OpenAI Gym–compatible API.
 
