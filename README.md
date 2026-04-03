@@ -10,13 +10,15 @@ short_description: Enterprise Clinical AI Training Environment — Multi-Agent T
 ---
 
 <div align="center">
-
-<img src="https://img.shields.io/badge/OpenEnv%202025-Submission-blue?style=for-the-badge&logo=huggingface&logoColor=white" />
-<img src="https://img.shields.io/badge/Clinical%20AI-Enterprise%20Grade-red?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0id2hpdGUiIGQ9Ik0xMiAyTDIgN3YxMGwxMCA1IDEwLTV2LTEwTDEyIDJ6Ii8+PC9zdmc+" />
-<img src="https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
-<img src="https://img.shields.io/badge/Multi--Agent-AI%20Architecture-6d28d9?style=for-the-badge" />
-<img src="https://img.shields.io/badge/License-Apache%202.0-green?style=for-the-badge" />
-
+ 
+[![OpenEnv 2025](https://img.shields.io/badge/OpenEnv%202025-Submission-blue?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/spaces/samrudh-nux/ClinicalTriageEnv)
+[![Clinical AI](https://img.shields.io/badge/Clinical%20AI-Enterprise%20Grade-red?style=for-the-badge&logo=heart&logoColor=white)](https://huggingface.co/spaces/samrudh-nux/ClinicalTriageEnv)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Multi-Agent](https://img.shields.io/badge/Multi--Agent-AI%20Architecture-6d28d9?style=for-the-badge&logo=buffer&logoColor=white)](https://huggingface.co/spaces/samrudh-nux/ClinicalTriageEnv)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green?style=for-the-badge&logo=apache&logoColor=white)](https://www.apache.org/licenses/LICENSE-2.0)
+[![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![Hugging Face](https://img.shields.io/badge/%F0%9F%A4%97%20Hugging%20Face-Space-FFD21E?style=for-the-badge)](https://huggingface.co/spaces/samrudh-nux/ClinicalTriageEnv)
 ---
 
 # 🏥 ClinicalTriageEnv
