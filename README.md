@@ -13,7 +13,6 @@ Creator : SAMRUDH
 <div align="center">
  
 [![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Multi-Agent](https://img.shields.io/badge/Multi--Agent-AI%20Architecture-6d28d9?style=for-the-badge&logo=buffer&logoColor=white)](https://huggingface.co/spaces/samrudh-nux/ClinicalTriageEnv)
 [![License](https://img.shields.io/badge/License-Apache%202.0-green?style=for-the-badge&logo=apache&logoColor=white)](https://www.apache.org/licenses/LICENSE-2.0)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
@@ -32,7 +31,6 @@ Creator : SAMRUDH
 
 [![ReDoc](https://img.shields.io/badge/📄%20ReDoc-Reference-555?style=for-the-badge)](https://samrudh-nux-clinicaltriageenv.hf.space/redoc)
 
-[![Leaderboard](https://img.shields.io/badge/📊-Leaderboard-orange?style=for-the-badge)](https://huggingface.co/spaces/samrudh-nux/ClinicalTriageEnv)
 
 ---
 
