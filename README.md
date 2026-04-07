@@ -1,19 +1,3 @@
----
-title: ClinicalTriageEnv — OpenEnv RL Environment for Clinical AI
-emoji: 🏥
-colorFrom: blue
-colorTo: green
-sdk: docker
-pinned: true
-license: mit
-tags:
-  - openenv
-  - reinforcement-learning
-  - healthcare
-  - clinical-ai
-  - llm-alignment
-
----
 
 <div align="center">
 
@@ -38,6 +22,23 @@ tags:
 ## Author : Samrudh 
 ---
 
+## 🌍 Real-World Impact
+
+Clinical AI is one of the highest-stakes domains for AI alignment:
+
+- **Emergency department triage errors** affect ~ Upto a  59% under tirage and 18% high triage ED visits per year globally
+- **Medication interaction errors** cause ~5 million deaths globally according to WHO
+- **Sepsis** kills 11 million people globaly/year — with mortality rising 31.5% per hour of delayed treatment
+
+ClinicalTriageEnv provides a **safe, synthetic, medically validated** training ground where AI agents can fail, learn, and improve — before ever touching a real patient.
+
+All clinical scenarios are:
+- ✅ Medically validated against current guidelines (ESI, Hour-1 SSC bundle, Beers Criteria)
+- ✅ Fully synthetic — no real patient data
+- ✅ Designed with emergency medicine domain experts in mind
+- ✅ Suitable for research, post-training, and AI safety evaluation
+
+---
 ## 🎯 Why This Environment Exists
 
 Every 60 seconds in a busy emergency department, a triage nurse makes a decision that can mean the difference between life and death. Assigning an ESI (Emergency Severity Index) level too low leaves a patient with a silent MI waiting in the lobby. Too high, and critical resources are consumed by non-urgent cases, crashing the entire system when the next trauma arrives.
