@@ -1,7 +1,3 @@
-"""
-ml_engine.py — NeuralMed CDS · Real ML Prediction Layer
-
-"""
 from __future__ import annotations
 import math, random
 from typing import Any, Dict, List, Tuple
@@ -107,3 +103,4 @@ def predict(symptoms,vitals,age=50,sex="Unknown",history=None,top_k=5):
 def get_evaluation_report():
     model=_get_model(); m=model.eval_metrics
     return {"dataset":"Synthetic Clinical QA Benchmark v2.1 (PubMed-inspired)","total_cases":120,"train_cases":m.get("train_cases",84),"test_cases":m.get("test_cases",36),"disease_classes":len(DISEASE_CLASSES),"feature_dimensions":len(FEATURE_NAMES),"model_architecture":m.get("model","Ensemble"),"metrics":{"accuracy":m["accuracy"],"precision":m["precision"],"recall":m["recall"],"f1_score":m["f1"]},"per_category":{"cardiac":{"accuracy":0.87,"n":18},"infectious":{"accuracy":0.91,"n":24},"neurological":{"accuracy":0.81,"n":16},"pulmonary":{"accuracy":0.84,"n":16},"gi":{"accuracy":0.79,"n":16},"metabolic":{"accuracy":0.83,"n":16},"other":{"accuracy":0.76,"n":14}},"emergency_detection":{"sensitivity":0.947,"specificity":0.891,"undertriage_rate":0.031,"overtriage_rate":0.115},"confusion_matrix":{"true_positive_emergency":36,"false_negative_emergency":2,"true_positive_non_emergency":11,"false_positive_non_emergency":1},"sklearn_available":SKLEARN_AVAILABLE,"pipeline":["Patient Input (symptoms, vitals, demographics)","Feature Extraction (12-dimensional binary/continuous vector)","ML Ensemble (Logistic Regression 60% + Gaussian Naive Bayes 40%)","Probability Calibration (Bayesian history adjustment)","Triage Override (vital sign safety net)","Clinical Reasoning Engine (6-step trace)","Structured 9-Section Clinical Output"]} 
+
