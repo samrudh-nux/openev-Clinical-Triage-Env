@@ -17,10 +17,15 @@ tags:
 
 <div align="center">
 
-<img src="https://img.shields.io/badge/OpenEnv-Spec%200.1%20Compliant-blueviolet?style=for-the-badge&logo=meta" />
-<img src="https://img.shields.io/badge/Meta%20PyTorch-Hackathon%202026-orange?style=for-the-badge&logo=pytorch" />
-<img src="https://img.shields.io/badge/Hugging%20Face-Space%20%F0%9F%A4%97-yellow?style=for-the-badge" />
-<img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" />
+
+
+[![HuggingFace Space](https://img.shields.io/badge/🤗%20Space-ClinicalTriageEnv-blue)](https://huggingface.co/spaces/samrudh-nux/ClinicalTriageEnv)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.10+-blue)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688)](https://fastapi.tiangolo.com)
+[![OpenEnv](https://img.shields.io/badge/OpenEnv-Compatible-orange)](https://github.com/openenv)
+
+---
 
 # 🏥 ClinicalTriageEnv
 ### *The World's First LLM-Aligned RL Environment for High-Stakes Clinical Decision Making*
@@ -31,6 +36,9 @@ tags:
 
 </div>
 
+---
+
+## Author : Samrudh 
 ---
 
 ## 🎯 Why This Environment Exists
