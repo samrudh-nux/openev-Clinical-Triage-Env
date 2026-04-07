@@ -612,7 +612,7 @@ ClinicalTriageEnv is designed to support:
 
 ---
 
-## 🙏 Acknowledgements
+## Acknowledgements
 
 Built on the **OpenEnv** framework by **Meta & Hugging Face** — the open-source standard for RL environment infrastructure. Special thanks to the Meta PyTorch team and the Hugging Face community for making this ecosystem possible.
 
