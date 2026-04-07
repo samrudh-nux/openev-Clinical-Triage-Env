@@ -6,6 +6,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-blue)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688)](https://fastapi.tiangolo.com)
 [![OpenEnv](https://img.shields.io/badge/OpenEnv-Compatible-orange)](https://github.com/openenv)
+[![Meta Llama 3](https://img.shields.io/badge/LLM-Meta_Llama_3_70B-purple)](https://llama.meta.com)
 
 ---
 
