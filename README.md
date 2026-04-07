@@ -700,7 +700,7 @@ MIT License — open for research, extension, and benchmarking.
 
 <div align="center">
 
-**Built with ❤️ for the Meta × Scaler Open-Env Hackathon**
+**Built with intrest for scaling health software - Meta × Scaler Open-Env Hackathon**
 
 *Advancing AI safety in healthcare, one graded episode at a time.*
 
