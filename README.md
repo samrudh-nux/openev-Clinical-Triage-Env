@@ -12,7 +12,7 @@ tags:
   - healthcare
   - clinical-ai
   - llm-alignment
-  - meta-pytorch-hackathon
+
 ---
 
 <div align="center">
