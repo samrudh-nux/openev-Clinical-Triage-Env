@@ -7,14 +7,12 @@ import math
 import os
 import re
 import sys
-import threading
 import time
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-# ── FastAPI ───────────────────────────────────────────────────────────────────
 from fastapi import (
     BackgroundTasks, FastAPI, HTTPException,
     Request, WebSocket, WebSocketDisconnect,
@@ -30,7 +28,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # OPTIONAL IMPORTS — graceful degradation
 # =============================================================================
 
-# ── Core environment v1 ───────────────────────────────────────────────────────
 try:
     from environment import ClinicalTriageEnv, TASK_REGISTRY as _ENV_TASK_REGISTRY
     from models import TriageAction, MedicationSafetyAction, SepsisManagementAction
@@ -43,7 +40,6 @@ except ImportError as e:
     _ENV_TASK_REGISTRY: Dict[str, Any] = {}
     print(f"⚠️  environment.py unavailable: {e}")
 
-# ── Inference (Llama 3) ───────────────────────────────────────────────────────
 try:
     from inference import (
         get_client, run_task as llm_run_task,
@@ -57,7 +53,6 @@ except ImportError as e:
     MODEL_NAME = "meta-llama/Llama-3.3-70B-Instruct"
     print(f"⚠️  inference.py unavailable: {e}")
 
-# ── LLM Evaluator ─────────────────────────────────────────────────────────────
 try:
     from llm_evaluator import (
         evaluate_with_llm, compute_hybrid_reward, get_oracle_action,
@@ -69,7 +64,6 @@ except ImportError as e:
     LLM_EVAL_AVAILABLE = False
     print(f"⚠️  llm_evaluator.py unavailable: {e}")
 
-# ── RL Environment v2 ─────────────────────────────────────────────────────────
 try:
     from environment_v2 import ClinicalTriageEnvV2, DifficultyMode, PatientAcuity  # noqa: F401
     ENV_V2_AVAILABLE = True
@@ -78,7 +72,6 @@ except ImportError as e:
     ENV_V2_AVAILABLE = False
     print(f"⚠️  environment_v2.py unavailable: {e}")
 
-# ── Training Loop ─────────────────────────────────────────────────────────────
 try:
     from training_loop import train as run_training, TrainingMetrics  # noqa: F401
     TRAINING_AVAILABLE = True
@@ -87,7 +80,6 @@ except ImportError as e:
     TRAINING_AVAILABLE = False
     print(f"⚠️  training_loop.py unavailable: {e}")
 
-# ── ML Engine ─────────────────────────────────────────────────────────────────
 try:
     from ml_engine import QLearningAgent  # noqa: F401
     ML_ENGINE_AVAILABLE = True
@@ -95,7 +87,6 @@ try:
 except ImportError:
     ML_ENGINE_AVAILABLE = False
 
-# ── PDF ───────────────────────────────────────────────────────────────────────
 try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
@@ -109,14 +100,12 @@ try:
 except ImportError:
     PDF_AVAILABLE = False
 
-# ── OpenAI ────────────────────────────────────────────────────────────────────
 try:
     from openai import OpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
     OPENAI_AVAILABLE = False
 
-# ── Anthropic ─────────────────────────────────────────────────────────────────
 try:
     import anthropic
     ANTHROPIC_AVAILABLE = True
@@ -124,11 +113,11 @@ except ImportError:
     ANTHROPIC_AVAILABLE = False
 
 # =============================================================================
-# TASK REGISTRY — merged from env + hardcoded fallback
+# TASK REGISTRY
 # =============================================================================
 
 TASK_REGISTRY: Dict[str, Any] = {
-    "triage_easy":       {"name": "Emergency Triage - Easy",           "type": "triage",            "difficulty": "easy",   "max_steps": 3, "scenario_key": "triage_easy_01",    "description": "Assign the correct ESI triage level (1=Resuscitation … 5=Non-Urgent)."},
+    "triage_easy":       {"name": "Emergency Triage - Easy",           "type": "triage",            "difficulty": "easy",   "max_steps": 3, "scenario_key": "triage_easy_01",    "description": "Assign the correct ESI triage level (1=Resuscitation to 5=Non-Urgent)."},
     "triage_medium":     {"name": "Emergency Triage - Medium",         "type": "triage",            "difficulty": "medium", "max_steps": 3, "scenario_key": "triage_medium_01",  "description": "Triage a patient presenting with potential ACS."},
     "triage_hard":       {"name": "Emergency Triage - Hard",           "type": "triage",            "difficulty": "hard",   "max_steps": 3, "scenario_key": "triage_hard_01",    "description": "Triage a complex patient with acute neurological symptoms on anticoagulation."},
     "med_safety_easy":   {"name": "Medication Safety Review - Easy",   "type": "medication_safety", "difficulty": "easy",   "max_steps": 3, "scenario_key": "med_easy_01",       "description": "Review medication list for drug interactions and contraindications."},
@@ -139,26 +128,23 @@ TASK_REGISTRY: Dict[str, Any] = {
     "sepsis_hard":       {"name": "Sepsis Management - Hard",          "type": "sepsis",            "difficulty": "hard",   "max_steps": 3, "scenario_key": "sepsis_hard_01",    "description": "Post-operative anastomotic leak — multi-organ failure, DIC, vancomycin allergy."},
 }
 
-# Merge any extra tasks from the real environment
 for k, v in _ENV_TASK_REGISTRY.items():
     if k not in TASK_REGISTRY:
         TASK_REGISTRY[k] = v
 
-# Normalise hyphenated keys (OpenEnv sometimes sends "triage-easy")
 _TASK_ALIASES: Dict[str, str] = {k.replace("_", "-"): k for k in TASK_REGISTRY}
 
+
 def _resolve_task(raw: Optional[str]) -> str:
-    """Normalise task_id, fall back to triage_easy rather than raising."""
     if not raw:
         return "triage_easy"
     normalised = str(raw).strip().replace("-", "_")
     if normalised in TASK_REGISTRY:
         return normalised
-    # Try alias
     alias = str(raw).strip()
     if alias in _TASK_ALIASES:
         return _TASK_ALIASES[alias]
-    return "triage_easy"  # benign fallback
+    return "triage_easy"
 
 
 MORTALITY_RISK: Dict[str, Dict] = {
@@ -173,23 +159,23 @@ MORTALITY_RISK: Dict[str, Dict] = {
     "sepsis_hard":       {"baseline": 45.0, "undertriage_mult": 6.0, "delay_per_min": 1.200},
 }
 
-SESSION_TTL = 7200  # 2 hours
+SESSION_TTL = 7200
 
 # =============================================================================
-# SYNTHETIC DATASET (used when real scenarios are unavailable)
+# SYNTHETIC DATASET
 # =============================================================================
 
 DATASET: List[Dict] = [
-    {"id": "CS-001", "age": 52, "sex": "M", "symptoms": "Crushing substernal chest pain, diaphoresis, nausea", "vitals": {"hr": 108, "sbp": 92, "temp_f": 98.2, "spo2": 94, "rr": 22, "gcs": 15}, "risk_factors": ["Hypertension", "Diabetes Mellitus", "Smoking"], "primary_dx": "STEMI", "triage": "EMERGENCY", "confidence": 0.87},
-    {"id": "CS-002", "age": 34, "sex": "F", "symptoms": "Thunderclap headache, nuchal rigidity, photophobia", "vitals": {"hr": 88, "sbp": 145, "temp_f": 100.1, "spo2": 97, "rr": 18, "gcs": 14}, "risk_factors": [], "primary_dx": "Subarachnoid Haemorrhage", "triage": "EMERGENCY", "confidence": 0.84},
-    {"id": "CS-003", "age": 64, "sex": "F", "symptoms": "Progressive dyspnoea, bilateral ankle oedema, orthopnoea", "vitals": {"hr": 96, "sbp": 158, "temp_f": 98.6, "spo2": 91, "rr": 24, "gcs": 15}, "risk_factors": ["Hypertension", "Cardiovascular Disease"], "primary_dx": "Acute Decompensated Heart Failure", "triage": "URGENT", "confidence": 0.81},
-    {"id": "CS-004", "age": 26, "sex": "F", "symptoms": "Pleuritic chest pain, dyspnoea, tachycardia, recent flight", "vitals": {"hr": 118, "sbp": 112, "temp_f": 99.1, "spo2": 93, "rr": 26, "gcs": 15}, "risk_factors": ["Recent Surgery / Immobility"], "primary_dx": "Pulmonary Embolism", "triage": "EMERGENCY", "confidence": 0.78},
-    {"id": "CS-005", "age": 28, "sex": "F", "symptoms": "Fever 39.4°C, dysuria, right flank pain, CVA tenderness", "vitals": {"hr": 102, "sbp": 108, "temp_f": 102.9, "spo2": 98, "rr": 19, "gcs": 15}, "risk_factors": [], "primary_dx": "Acute Pyelonephritis", "triage": "URGENT", "confidence": 0.88},
-    {"id": "CS-006", "age": 58, "sex": "M", "symptoms": "High fever, confusion, neck stiffness, petechial rash", "vitals": {"hr": 124, "sbp": 88, "temp_f": 104.2, "spo2": 95, "rr": 28, "gcs": 11}, "risk_factors": ["Immunocompromised"], "primary_dx": "Bacterial Meningitis / Sepsis", "triage": "EMERGENCY", "confidence": 0.92},
-    {"id": "CS-007", "age": 22, "sex": "M", "symptoms": "Polyuria, polydipsia, 8 kg weight loss, fruity breath", "vitals": {"hr": 112, "sbp": 98, "temp_f": 98.8, "spo2": 98, "rr": 26, "gcs": 14}, "risk_factors": ["Diabetes Mellitus"], "primary_dx": "Diabetic Ketoacidosis", "triage": "EMERGENCY", "confidence": 0.89},
-    {"id": "CS-008", "age": 71, "sex": "M", "symptoms": "Right facial droop, left arm weakness, slurred speech — onset 90 min ago", "vitals": {"hr": 82, "sbp": 178, "temp_f": 98.4, "spo2": 96, "rr": 17, "gcs": 13}, "risk_factors": ["Hypertension", "Cardiovascular Disease", "Diabetes Mellitus"], "primary_dx": "Ischaemic Stroke MCA", "triage": "EMERGENCY", "confidence": 0.91},
-    {"id": "CS-009", "age": 45, "sex": "M", "symptoms": "RUQ pain after fatty meal, shoulder radiation, nausea", "vitals": {"hr": 88, "sbp": 132, "temp_f": 100.6, "spo2": 98, "rr": 17, "gcs": 15}, "risk_factors": ["Diabetes Mellitus"], "primary_dx": "Acute Cholecystitis", "triage": "MODERATE", "confidence": 0.83},
-    {"id": "CS-010", "age": 68, "sex": "M", "symptoms": "Productive cough, fever, right lower lobe dullness, pleuritic pain", "vitals": {"hr": 94, "sbp": 128, "temp_f": 101.8, "spo2": 92, "rr": 23, "gcs": 15}, "risk_factors": ["Chronic Lung Disease", "Smoking"], "primary_dx": "Community-Acquired Pneumonia", "triage": "URGENT", "confidence": 0.85},
+    {"id": "CS-001", "age": 52, "sex": "M", "symptoms": "Crushing substernal chest pain radiating to left arm and jaw, diaphoresis, nausea", "vitals": {"hr": 108, "sbp": 92, "temp_f": 98.2, "spo2": 94, "rr": 22, "gcs": 15}, "risk_factors": ["Hypertension", "Diabetes Mellitus", "Smoking"], "primary_dx": "STEMI", "triage": "EMERGENCY", "confidence": 0.87},
+    {"id": "CS-002", "age": 34, "sex": "F", "symptoms": "Sudden thunderclap headache, nuchal rigidity, photophobia, nausea", "vitals": {"hr": 88, "sbp": 145, "temp_f": 100.1, "spo2": 97, "rr": 18, "gcs": 14}, "risk_factors": [], "primary_dx": "Subarachnoid Hemorrhage", "triage": "EMERGENCY", "confidence": 0.84},
+    {"id": "CS-003", "age": 64, "sex": "F", "symptoms": "Progressive dyspnea, bilateral ankle edema, orthopnea", "vitals": {"hr": 96, "sbp": 158, "temp_f": 98.6, "spo2": 91, "rr": 24, "gcs": 15}, "risk_factors": ["Hypertension", "Cardiovascular Disease"], "primary_dx": "Acute Decompensated Heart Failure", "triage": "URGENT", "confidence": 0.81},
+    {"id": "CS-004", "age": 26, "sex": "F", "symptoms": "Sudden pleuritic chest pain, dyspnea, tachycardia, recent long-haul flight", "vitals": {"hr": 118, "sbp": 112, "temp_f": 99.1, "spo2": 93, "rr": 26, "gcs": 15}, "risk_factors": ["Recent Surgery / Immobility"], "primary_dx": "Pulmonary Embolism", "triage": "EMERGENCY", "confidence": 0.78},
+    {"id": "CS-005", "age": 28, "sex": "F", "symptoms": "Fever 39.4C, dysuria, right flank pain, costovertebral angle tenderness", "vitals": {"hr": 102, "sbp": 108, "temp_f": 102.9, "spo2": 98, "rr": 19, "gcs": 15}, "risk_factors": [], "primary_dx": "Acute Pyelonephritis", "triage": "URGENT", "confidence": 0.88},
+    {"id": "CS-006", "age": 58, "sex": "M", "symptoms": "High fever, confusion, neck stiffness, petechial rash, photophobia", "vitals": {"hr": 124, "sbp": 88, "temp_f": 104.2, "spo2": 95, "rr": 28, "gcs": 11}, "risk_factors": ["Immunocompromised"], "primary_dx": "Bacterial Meningitis with Sepsis", "triage": "EMERGENCY", "confidence": 0.92},
+    {"id": "CS-007", "age": 22, "sex": "M", "symptoms": "Polyuria, polydipsia, weight loss 8kg, fruity breath, abdominal pain", "vitals": {"hr": 112, "sbp": 98, "temp_f": 98.8, "spo2": 98, "rr": 26, "gcs": 14}, "risk_factors": ["Diabetes Mellitus"], "primary_dx": "Diabetic Ketoacidosis", "triage": "EMERGENCY", "confidence": 0.89},
+    {"id": "CS-008", "age": 71, "sex": "M", "symptoms": "Sudden right facial droop, left arm weakness, slurred speech, onset 90 minutes ago", "vitals": {"hr": 82, "sbp": 178, "temp_f": 98.4, "spo2": 96, "rr": 17, "gcs": 13}, "risk_factors": ["Hypertension", "Cardiovascular Disease", "Diabetes Mellitus"], "primary_dx": "Ischemic Stroke MCA Territory", "triage": "EMERGENCY", "confidence": 0.91},
+    {"id": "CS-009", "age": 45, "sex": "M", "symptoms": "RUQ pain after fatty meal, radiation to right shoulder, nausea, mild fever", "vitals": {"hr": 88, "sbp": 132, "temp_f": 100.6, "spo2": 98, "rr": 17, "gcs": 15}, "risk_factors": ["Diabetes Mellitus"], "primary_dx": "Acute Cholecystitis", "triage": "MODERATE", "confidence": 0.83},
+    {"id": "CS-010", "age": 68, "sex": "M", "symptoms": "Productive cough, fever, right lower lobe dullness, pleuritic chest pain", "vitals": {"hr": 94, "sbp": 128, "temp_f": 101.8, "spo2": 92, "rr": 23, "gcs": 15}, "risk_factors": ["Chronic Lung Disease", "Smoking"], "primary_dx": "Community-Acquired Pneumonia", "triage": "URGENT", "confidence": 0.85},
 ]
 
 EVAL_METRICS: Dict[str, Any] = {
@@ -203,7 +189,6 @@ EVAL_METRICS: Dict[str, Any] = {
 # =============================================================================
 
 def compute_news2(v: Dict) -> Tuple[int, str]:
-    """Compute NEWS-2 score from a vitals dict."""
     score = 0
     rr   = float(v.get("rr")    or v.get("respiratory_rate") or 16)
     spo2 = float(v.get("spo2")  or 98)
@@ -253,18 +238,18 @@ def get_triage_level(news2: int, symptoms: str, risk_factors: List[str]) -> Dict
     hi = any(r in risk_factors for r in ["Cardiovascular Disease", "Immunocompromised", "Dialysis"])
 
     if news2 >= 7 or em:
-        return {"level": "EMERGENCY", "label": "🔴 Emergency",
+        return {"level": "EMERGENCY", "label": "Emergency",
                 "time_to_physician": "Immediate", "css_class": "triage-emergency", "color": "#ff4d6a",
                 "disposition": "Resuscitation bay. Immediate physician assessment."}
     if news2 >= 5 or urg or (news2 >= 3 and hi):
-        return {"level": "URGENT", "label": "🟠 Urgent",
+        return {"level": "URGENT", "label": "Urgent",
                 "time_to_physician": "< 15 minutes", "css_class": "triage-urgent", "color": "#ffb340",
                 "disposition": "High-acuity area. Senior nurse within 5 min."}
     if news2 >= 3:
-        return {"level": "MODERATE", "label": "🟡 Moderate",
+        return {"level": "MODERATE", "label": "Moderate",
                 "time_to_physician": "< 60 minutes", "css_class": "triage-moderate", "color": "#ffd940",
                 "disposition": "Standard bay. Reassess every 30 min."}
-    return {"level": "LOW_RISK", "label": "🟢 Low Risk",
+    return {"level": "LOW_RISK", "label": "Low Risk",
             "time_to_physician": "< 2 hours", "css_class": "triage-low", "color": "#00e5a0",
             "disposition": "Waiting area. Routine queue."}
 
@@ -310,7 +295,6 @@ def _get_backend(name: str):
 
 
 def _build_typed_action(task_type: str, action: Dict) -> Any:
-    """Convert raw action dict to Pydantic model for real graders."""
     if not ENV_V1_AVAILABLE:
         return action
     if task_type == "triage":
@@ -330,7 +314,7 @@ def _build_typed_action(task_type: str, action: Dict) -> Any:
             severity_assessment=action.get("severity_assessment", "moderate"),
             clinical_rationale=action.get("clinical_rationale", action.get("rationale", "")),
         )
-    else:  # sepsis
+    else:
         return SepsisManagementAction(
             sepsis_diagnosis=action.get("sepsis_diagnosis", "sepsis"),
             blood_cultures_ordered=action.get("blood_cultures_ordered", True),
@@ -347,7 +331,6 @@ def _build_typed_action(task_type: str, action: Dict) -> Any:
 
 
 def _pick_scenario(task_id: str) -> Dict:
-    """Pick the most appropriate synthetic scenario for a task."""
     diff = TASK_REGISTRY.get(task_id, {}).get("difficulty", "medium")
     mapping = {"easy": ["MODERATE", "LOW_RISK"], "medium": ["URGENT"], "hard": ["EMERGENCY"]}
     desired = mapping.get(diff, ["URGENT"])
@@ -361,11 +344,11 @@ def _pick_scenario(task_id: str) -> Dict:
 # SESSION STORES
 # =============================================================================
 
-_v1_sessions:    Dict[str, Dict]     = {}
-_v2_sessions:    Dict[str, Dict]     = {}
-_train_jobs:     Dict[str, Dict]     = {}
-_report_cache:   Dict[str, Any]      = {}
-_chat_histories: Dict[str, List]     = {}
+_v1_sessions:    Dict[str, Dict]      = {}
+_v2_sessions:    Dict[str, Dict]      = {}
+_train_jobs:     Dict[str, Dict]      = {}
+_report_cache:   Dict[str, Any]       = {}
+_chat_histories: Dict[str, List]      = {}
 _ws_clients:     Dict[str, WebSocket] = {}
 _llm_client = None
 
@@ -386,10 +369,10 @@ def _get_llm_client():
 
 @asynccontextmanager
 async def lifespan(app_: FastAPI):
-    print("🏥 ClinicalTriageEnv v5 starting…")
+    print("ClinicalTriageEnv v5 starting...")
     asyncio.create_task(_session_cleanup_loop())
     yield
-    print("🏥 ClinicalTriageEnv v5 shutting down.")
+    print("ClinicalTriageEnv v5 shutting down.")
 
 
 async def _session_cleanup_loop():
@@ -412,10 +395,10 @@ async def _session_cleanup_loop():
 # =============================================================================
 
 app = FastAPI(
-    title="ClinicalTriageEnv v5 — RL + LLM Hybrid Clinical AI",
-    version="5.2.0",
+    title="ClinicalTriageEnv",
+    version="1.0.0",
     description=(
-        "OpenEnv-compatible RL environment for clinical triage. "
+        "OpenEnv-compliant RL environment for clinical triage. "
         "We use a Llama-based evaluator to align RL agents with human clinical reasoning."
     ),
     docs_url="/docs",
@@ -429,7 +412,7 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 # =============================================================================
-# PYDANTIC MODELS  (used for non-OpenEnv endpoints only)
+# PYDANTIC MODELS
 # =============================================================================
 
 class AnalyzeRequest(BaseModel):
@@ -499,10 +482,10 @@ class SimulateRequest(BaseModel):
 # SYSTEM PROMPTS
 # =============================================================================
 
-CHATBOT_SYSTEM_PROMPT = """You are an expert clinical triage AI assistant embedded in ClinicalTriageEnv v5,
+CHATBOT_SYSTEM_PROMPT = """You are an expert clinical triage AI assistant embedded in ClinicalTriageEnv,
 a reinforcement learning simulation for emergency department triage training.
 The system uses a Llama 3 70B evaluator to align RL agents with human clinical reasoning.
-Reward formula: final_reward = rule_reward + 0.3 × llm_reward_adjustment.
+Reward formula: final_reward = rule_reward + 0.3 x llm_reward_adjustment.
 Your roles:
 1. CLINICAL EXPERT — Answer questions about triage protocols (ESI, Sepsis-3, WHO guidelines).
 2. RL TUTOR — Explain the RL environment: hybrid reward, LLM evaluation, curriculum difficulty.
@@ -511,10 +494,10 @@ Your roles:
 Format: Markdown, under 250 words unless asked for detail. Never fabricate clinical data."""
 
 _FALLBACK_CHAT: Dict[str, str] = {
-    "reward": "**Hybrid Reward**\n`final_reward = rule_reward + 0.3 × llm_reward_adjustment`\n\nLLM scores 5 dimensions (safety × 0.35 + clinical × 0.30 + reasoning × 0.15 + efficiency × 0.10 + ethics × 0.10).",
-    "sepsis": "**SSC Hour-1 Bundle**\n1. Blood cultures × 2 (before antibiotics)\n2. Serum lactate STAT\n3. Broad-spectrum antibiotics within 60 min\n4. 30 mL/kg IV crystalloid\n5. Norepinephrine if MAP < 65 mmHg\n\nEvery 1h delay ≈ +7% mortality.",
-    "triage": "**ESI Levels**\n- 🔴 ESI 1 — Resuscitation (NOW)\n- 🟠 ESI 2 — Emergent (< 10 min)\n- 🟡 ESI 3 — Urgent (< 30 min)\n- 🟢 ESI 4 — Less Urgent (< 1 hr)\n- ⚪ ESI 5 — Non-Urgent (< 2 hr)",
-    "vitals": "**Critical Thresholds**\n- SpO₂ < 90% → ESI-1\n- SBP < 80 mmHg → ESI-1\n- GCS ≤ 8 → ESI-1, airway at risk\n- HR > 130 → ESI-2\n- NEWS-2 ≥ 7 → HIGH RISK",
+    "reward": "**Hybrid Reward**\n`final_reward = rule_reward + 0.3 x llm_reward_adjustment`\n\nLLM scores 5 dimensions (safety x 0.35 + clinical x 0.30 + reasoning x 0.15 + efficiency x 0.10 + ethics x 0.10).",
+    "sepsis": "**SSC Hour-1 Bundle**\n1. Blood cultures x 2 (before antibiotics)\n2. Serum lactate STAT\n3. Broad-spectrum antibiotics within 60 min\n4. 30 mL/kg IV crystalloid\n5. Norepinephrine if MAP < 65 mmHg\n\nEvery 1h delay ~+7% mortality.",
+    "triage": "**ESI Levels**\n- ESI 1 - Resuscitation (NOW)\n- ESI 2 - Emergent (< 10 min)\n- ESI 3 - Urgent (< 30 min)\n- ESI 4 - Less Urgent (< 1 hr)\n- ESI 5 - Non-Urgent (< 2 hr)",
+    "vitals": "**Critical Thresholds**\n- SpO2 < 90% -> ESI-1\n- SBP < 80 mmHg -> ESI-1\n- GCS <= 8 -> ESI-1, airway at risk\n- HR > 130 -> ESI-2\n- NEWS-2 >= 7 -> HIGH RISK",
     "default": "**ClinicalTriageEnv Assistant** — Ask about triage levels, hybrid reward, sepsis bundle, vital thresholds, or RL training.",
 }
 
@@ -535,16 +518,14 @@ Return ONLY raw JSON. No markdown, no code fences. All DDx probabilities MUST su
   "differentialDiagnosis": [{"rank":1,"condition":"Full name","probability":38,"confidence":"High","explanation":"...","keyFindings":["f1"]}],
   "uncertaintyLimitations": ["limit1"],
   "recommendedTests": [{"name":"Test","category":"Laboratory","priority":"STAT","rationale":"why"}],
-  "triage": {"level":"EMERGENCY","label":"🔴 Emergency","timeToPhysician":"Immediate","rationale":"...","newsScore":5,"cssClass":"triage-emergency","disposition":"..."},
+  "triage": {"level":"EMERGENCY","label":"Emergency","timeToPhysician":"Immediate","rationale":"...","newsScore":5,"cssClass":"triage-emergency","disposition":"..."},
   "systemConfidence": {"overall":74,"diagnosticConfidence":71,"triageAccuracy":88,"dataCompleteness":65,"modelCertainty":72,"narrative":"one sentence"},
   "finalSummary": "3-4 sentence handoff summary."
 }"""
 
 
 # =============================================================================
-# ── PHASE 1 OPENENV ENDPOINTS ────────────────────────────────────────────────
-# These use `Request` directly (NOT Pydantic models) so they NEVER return 422
-# when the validator sends an empty body, null, or partial JSON.
+# PHASE 1 OPENENV ENDPOINTS — tolerate empty/null/partial bodies
 # =============================================================================
 
 @app.get("/")
@@ -553,11 +534,12 @@ def home():
         if os.path.exists(path):
             return FileResponse(path)
     return JSONResponse({
-        "service": "ClinicalTriageEnv v5",
-        "version": "5.2.0",
+        "service": "ClinicalTriageEnv",
+        "version": "1.0.0",
         "status":  "online",
         "docs":    "/docs",
         "health":  "/health",
+        "openenv_spec": "0.2",
         "note":    "We use a Llama-based evaluator to align RL agents with human clinical reasoning.",
     })
 
@@ -566,7 +548,7 @@ def home():
 def health():
     return {
         "status":   "healthy",
-        "version":  "5.2.0",
+        "version":  "1.0.0",
         "service":  "ClinicalTriageEnv",
         "llm_note": "We use a Llama-based evaluator to align RL agents with human clinical reasoning.",
         "modules": {
@@ -614,33 +596,29 @@ def list_tasks():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# /reset   — CRITICAL Phase 1 endpoint
-#   Accepts:  empty body, {}, {"task_id": "triage_easy"}, or hyphenated id
-#   Returns:  full observation dict
+# /reset — CRITICAL Phase 1 endpoint
 # ─────────────────────────────────────────────────────────────────────────────
+
 @app.post("/reset")
 async def reset_episode(request: Request):
-    """
-    OpenEnv-compliant reset. Tolerates empty / missing / malformed body.
-    Never returns 422.
-    """
+    """OpenEnv-compliant reset. Tolerates empty/missing/malformed body. Never returns 422."""
     task_id    = "triage_easy"
     session_id = None
 
     try:
         raw = await request.body()
-        if raw:
+        if raw and raw.strip() not in (b"", b"null"):
             body = json.loads(raw)
             task_id    = _resolve_task(body.get("task_id") or body.get("task-id"))
             session_id = body.get("session_id")
     except Exception:
-        pass  # malformed body → use defaults
+        pass
 
     session_id = session_id or str(uuid.uuid4())
     task       = TASK_REGISTRY[task_id]
-    diff       = task["difficulty"]
 
-    # ── Try real environment ──────────────────────────────────────────────
+    patient_data = None
+
     if ENV_V1_AVAILABLE:
         try:
             env = ClinicalTriageEnv(task_id=task_id)
@@ -677,14 +655,9 @@ async def reset_episode(request: Request):
                 "current_vitals": vitals_dict,
             }
         except Exception as exc:
-            print(f"⚠️  Real env reset failed: {exc} — using synthetic fallback")
-            ENV_V1_AVAILABLE_LOCAL = False
+            print(f"Real env reset failed: {exc} — using synthetic fallback")
             patient_data = None
-    else:
-        ENV_V1_AVAILABLE_LOCAL = False
-        patient_data = None
 
-    # ── Synthetic fallback ────────────────────────────────────────────────
     if patient_data is None:
         scenario    = _pick_scenario(task_id)
         vitals_dict = scenario["vitals"]
@@ -731,13 +704,12 @@ async def reset_episode(request: Request):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# /step   — Phase 1 endpoint
+# /step — Phase 1 endpoint
 # ─────────────────────────────────────────────────────────────────────────────
+
 @app.post("/step")
 async def step_episode(request: Request):
-    """
-    OpenEnv-compliant step. Tolerates empty / missing body.
-    """
+    """OpenEnv-compliant step. Tolerates empty/missing body."""
     action     = {}
     session_id = None
     reasoning  = ""
@@ -745,7 +717,7 @@ async def step_episode(request: Request):
 
     try:
         raw = await request.body()
-        if raw:
+        if raw and raw.strip() not in (b"", b"null"):
             body       = json.loads(raw)
             action     = body.get("action", {})
             session_id = body.get("session_id")
@@ -754,7 +726,6 @@ async def step_episode(request: Request):
     except Exception:
         pass
 
-    # Auto-create session if missing
     if not session_id or session_id not in _v1_sessions:
         session_id = str(uuid.uuid4())
         scenario   = DATASET[0]
@@ -780,7 +751,6 @@ async def step_episode(request: Request):
     feedback     = ""
     done         = False
 
-    # ── Real graders ──────────────────────────────────────────────────────
     if ENV_V1_AVAILABLE and sess.get("env"):
         env: ClinicalTriageEnv = sess["env"]
         try:
@@ -795,7 +765,6 @@ async def step_episode(request: Request):
                 "teaching_point":   info.get("teaching_point", ""),
             }
             feedback = getattr(obs_out, "feedback", "")
-            # Refresh cached vitals
             if hasattr(obs_out, "patient") and obs_out.patient:
                 v = obs_out.patient.vitals
                 sess["current_vitals"] = {
@@ -809,22 +778,18 @@ async def step_episode(request: Request):
         except Exception as exc:
             rule_reward = 0.3
             done        = True
-            grade_info  = {
-                "grade": 0.3, "component_scores": {},
-                "critical_errors": [str(exc)], "passed": False,
-            }
+            grade_info  = {"grade": 0.3, "component_scores": {}, "critical_errors": [str(exc)], "passed": False}
             feedback = f"Action processing error: {exc}"
     else:
-        # Lightweight fallback grader
         if task_type == "triage":
-            esi         = int(action.get("esi_level", action.get("triage_level", 3)))
-            target_esi  = {"easy": 4, "medium": 2, "hard": 1}.get(task_meta.get("difficulty", "medium"), 2)
+            esi        = int(action.get("esi_level", action.get("triage_level", 3)))
+            target_esi = {"easy": 4, "medium": 2, "hard": 1}.get(task_meta.get("difficulty", "medium"), 2)
             rule_reward = max(0.0, 1.0 - abs(esi - target_esi) * 0.3)
         elif task_type == "medication_safety":
             n_flags     = len(action.get("flagged_interactions", []))
             rule_reward = min(1.0, 0.4 + n_flags * 0.2)
         else:
-            completed   = sum([
+            completed = sum([
                 bool(action.get("blood_cultures_ordered")),
                 bool(action.get("antibiotics_ordered")),
                 bool(action.get("lactate_ordered")),
@@ -835,12 +800,10 @@ async def step_episode(request: Request):
         passed = rule_reward >= 0.6
         grade_info = {
             "grade": rule_reward, "component_scores": {},
-            "critical_errors": [], "passed": passed, "total_reward": rule_reward,
-            "teaching_point": "",
+            "critical_errors": [], "passed": passed, "total_reward": rule_reward, "teaching_point": "",
         }
         feedback = f"Fallback grader — rule reward: {rule_reward:.3f}"
 
-    # ── LLM reward shaping ────────────────────────────────────────────────
     if use_llm and LLM_EVAL_AVAILABLE:
         try:
             state_dict = {
@@ -851,9 +814,7 @@ async def step_episode(request: Request):
                 "expected_action": {"esi_level": 2},
             }
             llm_result = evaluate_with_llm(
-                state=state_dict,
-                action=action,
-                reasoning=reasoning,
+                state=state_dict, action=action, reasoning=reasoning,
                 backend=_get_backend(os.environ.get("LLM_BACKEND", "rule_based")),
             )
             final_reward, breakdown = compute_hybrid_reward(rule_reward, llm_result, alpha=0.3)
@@ -894,18 +855,17 @@ async def step_episode(request: Request):
         "critical_errors":  grade_info.get("critical_errors", []),
         "risk_profile":     MORTALITY_RISK.get(task_id, {}),
         "using_real_graders": ENV_V1_AVAILABLE,
-        "reward_formula":   "final_reward = rule_reward + 0.3 × llm_adjustment",
+        "reward_formula":   "final_reward = rule_reward + 0.3 x llm_adjustment",
     }
 
 
 @app.get("/state")
 def get_state(session_id: Optional[str] = None):
-    """Return current episode state (OpenEnv spec)."""
     if not session_id or session_id not in _v1_sessions:
         return {
-            "session_id":    session_id,
-            "status":        "no_active_session",
-            "tasks":         list(TASK_REGISTRY.keys()),
+            "session_id":      session_id,
+            "status":          "no_active_session",
+            "tasks":           list(TASK_REGISTRY.keys()),
             "active_sessions": len(_v1_sessions),
         }
     sess = _v1_sessions[session_id]
@@ -924,78 +884,67 @@ def get_state(session_id: Optional[str] = None):
 # =============================================================================
 
 def _analyze_fallback(data: Dict, triage: Dict, news2: int) -> Dict:
-    s = data.get("symptoms", "").lower()
+    s  = data.get("symptoms", "").lower()
     rf = data.get("risk_factors", [])
     if any(w in s for w in ["chest pain", "crushing"]):
         ddx = [
-            {"rank": 1, "condition": "Acute Coronary Syndrome",   "probability": 38, "confidence": "Medium", "explanation": "Urgent ACS rule-out via ECG + troponins.", "keyFindings": ["Chest pain", "ECG"]},
-            {"rank": 2, "condition": "Pulmonary Embolism",        "probability": 24, "confidence": "Low",    "explanation": "PE excluded with Wells + D-dimer.",          "keyFindings": ["Tachycardia"]},
-            {"rank": 3, "condition": "Aortic Dissection",         "probability": 16, "confidence": "Low",    "explanation": "CT aortography if tearing pain.",            "keyFindings": ["Pain character"]},
-            {"rank": 4, "condition": "GERD",                      "probability": 13, "confidence": "Low",    "explanation": "Acid reflux mimics cardiac pain.",           "keyFindings": ["Burning"]},
-            {"rank": 5, "condition": "Musculoskeletal",           "probability":  9, "confidence": "Low",    "explanation": "Diagnosis of exclusion.",                    "keyFindings": ["Reproducible"]},
+            {"rank": 1, "condition": "Acute Coronary Syndrome",  "probability": 38, "confidence": "Medium", "explanation": "Urgent ACS rule-out via ECG + troponins.", "keyFindings": ["Chest pain", "ECG"]},
+            {"rank": 2, "condition": "Pulmonary Embolism",       "probability": 24, "confidence": "Low",    "explanation": "PE excluded with Wells + D-dimer.",         "keyFindings": ["Tachycardia"]},
+            {"rank": 3, "condition": "Aortic Dissection",        "probability": 16, "confidence": "Low",    "explanation": "CT aortography if tearing pain.",           "keyFindings": ["Pain character"]},
+            {"rank": 4, "condition": "GERD",                     "probability": 13, "confidence": "Low",    "explanation": "Acid reflux mimics cardiac pain.",          "keyFindings": ["Burning"]},
+            {"rank": 5, "condition": "Musculoskeletal",          "probability":  9, "confidence": "Low",    "explanation": "Diagnosis of exclusion.",                   "keyFindings": ["Reproducible"]},
         ]
     elif any(w in s for w in ["headache", "thunderclap"]):
         ddx = [
-            {"rank": 1, "condition": "Tension Headache",          "probability": 35, "confidence": "Medium", "explanation": "Bilateral pressure quality.",               "keyFindings": ["Bilateral"]},
-            {"rank": 2, "condition": "Migraine",                  "probability": 28, "confidence": "Medium", "explanation": "Unilateral + nausea + photophobia.",        "keyFindings": ["Photophobia"]},
-            {"rank": 3, "condition": "Subarachnoid Haemorrhage",  "probability": 17, "confidence": "High",   "explanation": "Thunderclap → CT head + LP.",               "keyFindings": ["Thunderclap"]},
-            {"rank": 4, "condition": "Bacterial Meningitis",      "probability": 12, "confidence": "Medium", "explanation": "Fever + neck stiffness = meningism.",       "keyFindings": ["Neck stiffness"]},
-            {"rank": 5, "condition": "Hypertensive Emergency",    "probability":  8, "confidence": "Low",    "explanation": "BP > 180/120 + end-organ damage.",          "keyFindings": ["High BP"]},
+            {"rank": 1, "condition": "Tension Headache",         "probability": 35, "confidence": "Medium", "explanation": "Bilateral pressure quality.",              "keyFindings": ["Bilateral"]},
+            {"rank": 2, "condition": "Subarachnoid Hemorrhage",  "probability": 28, "confidence": "High",   "explanation": "Thunderclap onset demands LP/CT.",         "keyFindings": ["Thunderclap"]},
+            {"rank": 3, "condition": "Migraine",                 "probability": 22, "confidence": "Medium", "explanation": "Photophobia, nausea hallmarks.",           "keyFindings": ["Unilateral", "Aura"]},
+            {"rank": 4, "condition": "Meningitis",               "probability": 15, "confidence": "Medium", "explanation": "Fever + nuchal rigidity.",                 "keyFindings": ["Fever", "Stiff neck"]},
         ]
     else:
         ddx = [
-            {"rank": 1, "condition": "Undifferentiated",          "probability": 35, "confidence": "Low", "explanation": "Full workup required.", "keyFindings": ["Incomplete data"]},
-            {"rank": 2, "condition": "Infectious Aetiology",      "probability": 25, "confidence": "Low", "explanation": "Systemic infection.",   "keyFindings": ["Inflammatory markers"]},
-            {"rank": 3, "condition": "Metabolic Disorder",        "probability": 20, "confidence": "Low", "explanation": "DKA, thyroid storm.",   "keyFindings": ["Glucose"]},
-            {"rank": 4, "condition": "Cardiac Aetiology",         "probability": 12, "confidence": "Low", "explanation": "ECG + troponin.",       "keyFindings": ["ECG"]},
-            {"rank": 5, "condition": "Functional",                "probability":  8, "confidence": "Low", "explanation": "Exclusion only.",       "keyFindings": ["Exclusion"]},
+            {"rank": 1, "condition": "Primary Diagnosis Unknown", "probability": 60, "confidence": "Low",  "explanation": "Insufficient symptom data.", "keyFindings": []},
+            {"rank": 2, "condition": "Infection / Sepsis",        "probability": 40, "confidence": "Low",  "explanation": "Vital sign abnormalities.",  "keyFindings": ["Fever", "HR"]},
         ]
+    tests = [
+        {"name": "CBC with differential", "category": "Laboratory", "priority": "STAT",    "rationale": "Identify infection/anemia"},
+        {"name": "BMP",                   "category": "Laboratory", "priority": "STAT",    "rationale": "Electrolytes, renal function"},
+        {"name": "12-lead ECG",           "category": "Cardiology", "priority": "URGENT",  "rationale": "Rule out ACS/arrhythmia"},
+        {"name": "Chest X-ray",           "category": "Radiology",  "priority": "URGENT",  "rationale": "Pulmonary pathology"},
+    ]
     return {
         "patientSummary": {
-            "synopsis": f"Patient presenting with: {data.get('symptoms','')[:120]}. NEWS-2 {news2}. Rule-based engine active.",
-            "acuityFlag": "CRITICAL" if triage["level"] == "EMERGENCY" else "HIGH" if triage["level"] == "URGENT" else "MODERATE",
-            "dominantSymptomCluster": "Rule-based classification",
+            "synopsis":              f"Patient presenting with {data.get('symptoms', 'unknown symptoms')}. NEWS-2={news2}.",
+            "acuityFlag":            triage.get("level", "MODERATE"),
+            "dominantSymptomCluster": "General",
         },
         "clinicalReasoningTrace": [
-            {"step": 1, "tag": "VITAL_SIGN_ANALYSIS",  "dotClass": "active", "finding": f"NEWS-2: {news2}", "inference": "HIGH RISK" if news2 >= 7 else "MEDIUM" if news2 >= 3 else "LOW"},
-            {"step": 2, "tag": "TRIAGE_DETERMINATION", "dotClass": "warn",   "finding": f"→ {triage['label']}", "inference": triage["disposition"]},
-            {"step": 3, "tag": "DDX_GENERATION",       "dotClass": "ok",     "finding": "Rule-based DDx", "inference": "Physician review mandatory"},
+            {"step": 1, "tag": "VITALS",     "finding": f"NEWS-2={news2}", "inference": triage.get("label", ""), "dotClass": "active"},
+            {"step": 2, "tag": "TRIAGE",     "finding": triage.get("level", ""), "inference": triage.get("disposition", ""), "dotClass": "active"},
         ],
         "differentialDiagnosis": ddx,
-        "uncertaintyLimitations": [
-            "AI engine offline — rule-based fallback. Set HF_TOKEN or GROQ_API_KEY.",
-            "No physical examination findings.", "Laboratory results not integrated.",
-        ],
-        "recommendedTests": [
-            {"name": "12-Lead ECG",      "category": "Cardiac",    "priority": "STAT",   "rationale": "Initial mandatory investigation"},
-            {"name": "Full Blood Count", "category": "Laboratory", "priority": "STAT",   "rationale": "Infection / anaemia screen"},
-            {"name": "Troponin",         "category": "Cardiac",    "priority": "STAT",   "rationale": "Exclude acute MI"},
-            {"name": "CXR",              "category": "Imaging",    "priority": "URGENT", "rationale": "Pulmonary pathology"},
-        ],
+        "uncertaintyLimitations": ["Limited data", "Fallback mode — LLM unavailable"],
+        "recommendedTests": tests,
         "triage": {
-            "level": triage["level"], "label": triage["label"],
-            "timeToPhysician": triage["time_to_physician"],
-            "rationale": f"NEWS-2 {news2}. {triage['disposition']}",
-            "newsScore": news2, "cssClass": triage["css_class"],
-            "disposition": triage["disposition"],
+            "level":            triage["level"],
+            "label":            triage["label"],
+            "timeToPhysician":  triage["time_to_physician"],
+            "rationale":        triage["disposition"],
+            "newsScore":        news2,
+            "cssClass":         triage.get("css_class", ""),
+            "disposition":      triage["disposition"],
         },
         "systemConfidence": {
-            "overall": 42, "diagnosticConfidence": 30, "triageAccuracy": 75,
-            "dataCompleteness": 50, "modelCertainty": 35,
-            "narrative": "Rule-based fallback active. Set API key for full AI.",
+            "overall": 55, "diagnosticConfidence": 50, "triageAccuracy": 75,
+            "dataCompleteness": 50, "modelCertainty": 55,
+            "narrative": "Rule-based fallback; confidence is limited without LLM analysis.",
         },
-        "finalSummary": (
-            f"Patient presenting with {data.get('symptoms','')[:100]}. "
-            f"NEWS-2 {news2} → triage: {triage['label']}. "
-            "Physician assessment required."
-        ),
+        "finalSummary": f"Patient requires {triage.get('time_to_physician', 'prompt')} assessment. NEWS-2 score is {news2}. {triage.get('disposition', '')}",
     }
 
 
 async def _call_llm_analyze(prompt_data: Dict) -> Tuple[Optional[Dict], str]:
-    """Try Llama → OpenAI → None for /analyze."""
-    hf_token = os.environ.get("HF_TOKEN", "")
-    if INFERENCE_AVAILABLE and hf_token:
+    if INFERENCE_AVAILABLE:
         try:
             client = _get_llm_client()
             if client:
@@ -1005,7 +954,7 @@ async def _call_llm_analyze(prompt_data: Dict) -> Tuple[Optional[Dict], str]:
                         model=MODEL_NAME,
                         messages=[
                             {"role": "system", "content": ANALYZE_SYSTEM_PROMPT},
-                            {"role": "user", "content": json.dumps(prompt_data)},
+                            {"role": "user",   "content": json.dumps(prompt_data)},
                         ],
                         temperature=0.1, max_tokens=2000,
                     )),
@@ -1027,7 +976,7 @@ async def _call_llm_analyze(prompt_data: Dict) -> Tuple[Optional[Dict], str]:
                     model="gpt-4o-mini", max_tokens=2000, temperature=0.2,
                     messages=[
                         {"role": "system", "content": ANALYZE_SYSTEM_PROMPT},
-                        {"role": "user", "content": json.dumps(prompt_data)},
+                        {"role": "user",   "content": json.dumps(prompt_data)},
                     ],
                 )),
                 timeout=20.0,
@@ -1098,14 +1047,13 @@ async def chat_endpoint(req: ChatRequest):
             f"[Patient context: Task={ctx.get('task','')}. "
             f"Complaint: {ctx.get('complaint', symptoms)}. "
             f"HR={ctx.get('heart_rate','?')} bpm. "
-            f"SpO₂={ctx.get('oxygen_level','?')}%.]\n\n"
+            f"SpO2={ctx.get('oxygen_level','?')}%.]\n\n"
         )
 
     full_message = context_prefix + req.message
     powered_by   = "fallback"
     reply        = ""
 
-    # 1. Try Anthropic Claude
     api_key = os.environ.get("ANTHROPIC_API_KEY", "")
     if ANTHROPIC_AVAILABLE and api_key.startswith("sk-ant-"):
         try:
@@ -1123,8 +1071,7 @@ async def chat_endpoint(req: ChatRequest):
             reply      = response.content[0].text
             powered_by = "claude"
         except Exception as ex:
-            reply = _fallback_chat(req.message) + f"\n\n---\n*⚠ Claude unavailable: {str(ex)[:60]}*"
-    # 2. Try OpenAI
+            reply = _fallback_chat(req.message) + f"\n\n---\n*Claude unavailable: {str(ex)[:60]}*"
     elif OPENAI_AVAILABLE and os.environ.get("OPENAI_API_KEY"):
         try:
             oa   = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -1145,7 +1092,7 @@ async def chat_endpoint(req: ChatRequest):
     else:
         reply = _fallback_chat(req.message)
         if not api_key:
-            reply += "\n\n---\n*🔑 Set ANTHROPIC_API_KEY for full AI responses.*"
+            reply += "\n\n---\n*Set ANTHROPIC_API_KEY for full AI responses.*"
 
     history = list(history) + [
         {"role": "user",      "content": req.message},
@@ -1199,27 +1146,26 @@ def get_dataset(limit: int = 10):
 
 @app.post("/benchmark")
 def benchmark(req: BenchmarkRequest):
-    task_id = _resolve_task(req.task_id)
+    task_id    = _resolve_task(req.task_id)
     task_type  = TASK_REGISTRY[task_id]["type"]
     difficulty = TASK_REGISTRY[task_id]["difficulty"]
     action     = req.user_action
-    score      = 0.5
 
     if task_type == "triage":
-        esi        = int(action.get("esi_level", action.get("level", 3)))
-        target     = {"easy": 4, "medium": 2, "hard": 1}.get(difficulty, 2)
-        delta      = abs(esi - target)
-        score      = max(0.0, 1.0 - delta * 0.3)
-        passed     = delta <= 1
+        esi    = int(action.get("esi_level", action.get("level", 3)))
+        target = {"easy": 4, "medium": 2, "hard": 1}.get(difficulty, 2)
+        delta  = abs(esi - target)
+        score  = max(0.0, 1.0 - delta * 0.3)
+        passed = delta <= 1
     elif task_type == "medication_safety":
-        n          = len(action.get("flagged_interactions", []))
-        score      = min(1.0, 0.4 + n * 0.25)
-        passed     = score >= 0.6
+        n      = len(action.get("flagged_interactions", []))
+        score  = min(1.0, 0.4 + n * 0.25)
+        passed = score >= 0.6
     else:
-        items      = sum([bool(action.get("blood_cultures_ordered")), bool(action.get("antibiotics_ordered")),
-                          bool(action.get("lactate_ordered")), int(action.get("iv_fluid_bolus_ml", 0)) >= 1500])
-        score      = items / 4.0
-        passed     = score >= 0.75
+        items  = sum([bool(action.get("blood_cultures_ordered")), bool(action.get("antibiotics_ordered")),
+                      bool(action.get("lactate_ordered")), int(action.get("iv_fluid_bolus_ml", 0)) >= 1500])
+        score  = items / 4.0
+        passed = score >= 0.75
 
     oracle_score = min(1.3, score * 1.3 + 0.15)
     return {
@@ -1237,7 +1183,7 @@ def benchmark(req: BenchmarkRequest):
 def leaderboard():
     return {
         "leaderboard": [
-            {"rank": 1, "name": "llama3-70b-rl-aligned",  "model": f"Meta Llama 3 70B (RL+LLM) — {MODEL_NAME}", "score": 0.961, "tasks": 9, "note": "Llama evaluator aligned"},
+            {"rank": 1, "name": "llama3-70b-rl-aligned",  "model": f"Meta Llama 3 70B (RL+LLM) — {MODEL_NAME}", "score": 0.961, "tasks": 9},
             {"rank": 2, "name": "claude-opus-4-clinical",  "model": "Anthropic Claude Opus 4",                   "score": 0.947, "tasks": 9},
             {"rank": 3, "name": "gpt-4o-medbench",         "model": "OpenAI GPT-4o",                             "score": 0.891, "tasks": 9},
             {"rank": 4, "name": "gemini-pro-health",        "model": "Google Gemini 1.5 Pro",                    "score": 0.843, "tasks": 9},
@@ -1265,23 +1211,23 @@ def simulate_deterioration(req: SimulateRequest):
     mult     = risk["undertriage_mult"] if wrong else 1.0
     new_mort = round(min(95.0, risk["baseline"] + risk["delay_per_min"] * elapsed * mult), 1)
 
-    base = sess.get("current_vitals", {}) if sess else {}
+    base  = sess.get("current_vitals", {}) if sess else {}
     decay = elapsed * (1.5 if wrong else 1.0)
     current_vitals = {
-        "hr":     round(min(200, float(base.get("hr", 80))  + decay * 2),   1),
-        "sbp":    round(max(40,  float(base.get("sbp", 120)) - decay * 3),  1),
-        "spo2":   round(max(60,  float(base.get("spo2", 98)) - decay * 0.5),1),
-        "rr":     round(min(60,  float(base.get("rr", 16))  + decay * 0.5), 1),
+        "hr":     round(min(200, float(base.get("hr", 80))  + decay * 2),    1),
+        "sbp":    round(max(40,  float(base.get("sbp", 120)) - decay * 3),   1),
+        "spo2":   round(max(60,  float(base.get("spo2", 98)) - decay * 0.5), 1),
+        "rr":     round(min(60,  float(base.get("rr", 16))  + decay * 0.5),  1),
         "gcs":    max(3, int(base.get("gcs", 15)) - int(decay // 10)),
         "temp_f": round(min(107, float(base.get("temp_f", 98.6)) + decay * 0.05), 1),
     }
     news2, _ = compute_news2(current_vitals)
-    verdict   = "UNSAFE" if new_mort > 30 else "CAUTION" if new_mort > 15 else "SAFE"
-    alerts    = []
-    if new_mort > 50:    alerts.append({"severity": "critical", "message": "🚨 CRITICAL — Patient in extremis."})
-    elif new_mort > 30:  alerts.append({"severity": "critical", "message": "⚠️ Immediate intervention required."})
-    elif new_mort > 15:  alerts.append({"severity": "warning",  "message": "△ Vitals deteriorating."})
-    else:                alerts.append({"severity": "info",     "message": "ℹ️ Stable — prompt attention recommended."})
+    verdict  = "UNSAFE" if new_mort > 30 else "CAUTION" if new_mort > 15 else "SAFE"
+    alerts   = []
+    if new_mort > 50:   alerts.append({"severity": "critical", "message": "CRITICAL — Patient in extremis."})
+    elif new_mort > 30: alerts.append({"severity": "critical", "message": "Immediate intervention required."})
+    elif new_mort > 15: alerts.append({"severity": "warning",  "message": "Vitals deteriorating."})
+    else:               alerts.append({"severity": "info",     "message": "Stable — prompt attention recommended."})
 
     return {
         "session_id": sid, "task_id": task_id, "elapsed_minutes": elapsed,
@@ -1333,7 +1279,7 @@ def get_pdf(session_id: str):
     it = styles["Italic"]
     s  = []
 
-    s.append(Paragraph("🏥 ClinicalTriageEnv v5 — Clinical Analysis Report", h1))
+    s.append(Paragraph("ClinicalTriageEnv — Clinical Analysis Report", h1))
     s.append(Paragraph(
         f"Session: {session_id[:8].upper()} | "
         f"Generated: {report.get('generated_at', datetime.now().isoformat())} | "
@@ -1385,7 +1331,7 @@ def get_pdf(session_id: str):
     s.append(HRFlowable(width="100%", thickness=0.5))
     s.append(Spacer(1, 6))
     s.append(Paragraph(
-        "⚕️ DISCLAIMER: AI-generated for clinical decision support only. "
+        "DISCLAIMER: AI-generated for clinical decision support only. "
         "All outputs must be validated by a licensed healthcare professional.", it,
     ))
     doc.build(s)
@@ -1438,21 +1384,21 @@ def inference_status():
 @app.get("/difficulties")
 def list_difficulties():
     return {"difficulties": [
-        {"id": "calm",  "label": "🟢 Calm ER",   "patients": "2–3",   "resources": "Ample"},
-        {"id": "busy",  "label": "🟡 Busy ER",   "patients": "5–8",   "resources": "Moderate"},
-        {"id": "surge", "label": "🟠 Surge ER",  "patients": "10–14", "resources": "Limited"},
-        {"id": "chaos", "label": "🔴 Chaos/MCI", "patients": "15–20", "resources": "Critical"},
+        {"id": "calm",  "label": "Calm ER",   "patients": "2-3",   "resources": "Ample"},
+        {"id": "busy",  "label": "Busy ER",   "patients": "5-8",   "resources": "Moderate"},
+        {"id": "surge", "label": "Surge ER",  "patients": "10-14", "resources": "Limited"},
+        {"id": "chaos", "label": "Chaos/MCI", "patients": "15-20", "resources": "Critical"},
     ]}
 
 
 @app.get("/backends")
 def list_backends():
     return {"backends": [
-        {"id": "llama3_groq",     "model": "Meta Llama 3.3-70B", "via": "Groq",       "requires": "GROQ_API_KEY",     "preferred": True},
-        {"id": "llama3_together", "model": "Meta Llama 3-70B",   "via": "Together AI","requires": "TOGETHER_API_KEY", "preferred": False},
-        {"id": "mistral",         "model": "Mistral Medium",     "via": "Mistral API","requires": "MISTRAL_API_KEY",  "preferred": False},
-        {"id": "gpt4",            "model": "GPT-4o Mini",        "via": "OpenAI",     "requires": "OPENAI_API_KEY",   "preferred": False},
-        {"id": "rule_based",      "model": "Heuristic Oracle",   "via": "Local",      "requires": "None",             "preferred": False},
+        {"id": "llama3_groq",     "model": "Meta Llama 3.3-70B", "via": "Groq",        "requires": "GROQ_API_KEY",     "preferred": True},
+        {"id": "llama3_together", "model": "Meta Llama 3-70B",   "via": "Together AI", "requires": "TOGETHER_API_KEY", "preferred": False},
+        {"id": "mistral",         "model": "Mistral Medium",     "via": "Mistral API", "requires": "MISTRAL_API_KEY",  "preferred": False},
+        {"id": "gpt4",            "model": "GPT-4o Mini",        "via": "OpenAI",      "requires": "OPENAI_API_KEY",   "preferred": False},
+        {"id": "rule_based",      "model": "Heuristic Oracle",   "via": "Local",       "requires": "None",             "preferred": False},
     ], "active": os.environ.get("LLM_BACKEND", "rule_based")}
 
 
@@ -1490,9 +1436,9 @@ def rl_step(req: RLStepRequest):
         "done":        done,
         "info":        info,
         "explainability": {
-            "llm_scores":      info.get("llm_scores", {}),
-            "llm_explanation": info.get("llm_explanation", ""),
-            "oracle_action":   info.get("oracle_action", {}),
+            "llm_scores":       info.get("llm_scores", {}),
+            "llm_explanation":  info.get("llm_explanation", ""),
+            "oracle_action":    info.get("oracle_action", {}),
             "component_scores": info.get("component_scores", {}),
         },
     }
@@ -1681,20 +1627,34 @@ def agent_analytics():
 
 
 # =============================================================================
-# ENTRY POINT
+# ENTRY POINT — server.app:main
 # =============================================================================
 
-if __name__ == "__main__":
+def main():
+    """
+    Entry point for the OpenEnv validator.
+    Reference as: server.app:main
+    """
     import uvicorn
     port = int(os.environ.get("PORT", 7860))
     print(f"\n{'='*60}")
-    print(f"  🏥 ClinicalTriageEnv v5.2.0 — Unified App")
+    print(f"  ClinicalTriageEnv v1.0.0")
     print(f"  Port      : {port}")
     print(f"  Model     : {MODEL_NAME}")
-    print(f"  HF_TOKEN  : {'✅ set' if os.environ.get('HF_TOKEN') else '❌ not set'}")
+    print(f"  HF_TOKEN  : {'set' if os.environ.get('HF_TOKEN') else 'not set'}")
     print(f"  LLM_BACK  : {os.environ.get('LLM_BACKEND', 'rule_based')}")
     print(f"  Modules   : env_v1={ENV_V1_AVAILABLE}, env_v2={ENV_V2_AVAILABLE}, "
           f"llm_eval={LLM_EVAL_AVAILABLE}, training={TRAINING_AVAILABLE}")
-    print(f"  Phase 1   : /reset + /step accept empty body ✅")
+    print(f"  Phase 1   : /reset + /step accept empty body OK")
+    print(f"  Entry     : server.app:main")
     print(f"{'='*60}\n")
-    uvicorn.run("server.app:app", host="0.0.0.0", port=port, workers=1, log_level="info")
+    uvicorn.run(
+        "server.app:app",
+        host="0.0.0.0",
+        port=port,
+        workers=1,
+    )
+
+
+if __name__ == "__main__":
+    main()
