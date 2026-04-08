@@ -1697,4 +1697,4 @@ if __name__ == "__main__":
           f"llm_eval={LLM_EVAL_AVAILABLE}, training={TRAINING_AVAILABLE}")
     print(f"  Phase 1   : /reset + /step accept empty body ✅")
     print(f"{'='*60}\n")
-    uvicorn.run("app:app", host="0.0.0.0", port=port, workers=1, log_level="info")
+    uvicorn.run("server.app:app", host="0.0.0.0", port=port, workers=1, log_level="info")
