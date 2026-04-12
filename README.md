@@ -16,6 +16,11 @@ tags:
   - triage
   - pytorch
 ---
+---
+
+## Creator : Samrudh
+
+---
 
 <div align="center">
 
@@ -28,15 +33,13 @@ tags:
 
 # 🏥 ClinicalTriageEnv
 
-### *The first OpenEnv-compliant RL environment where a Llama 3 70B evaluator teaches agents to think like a physician*
+### *A OpenEnv-compliant RL environment where a Llama 3 70B evaluator teaches agents to think like a physician*
 
 **9 clinical tasks · 3 medical domains · Real graders · LLM reward shaping · Zero hallucination tolerance**
 
 [**▶ Live Demo**](https://huggingface.co/spaces/samrudh-nux/ClinicalTriageEnv) · [**API Docs**](https://huggingface.co/spaces/samrudh-nux/ClinicalTriageEnv/docs) · [**GitHub**](https://github.com/samrudh-nux/meta-x-scaler-openev-Clinical-Triage-Env)
 
 </div>
-
----
 
 ## The Problem Being Solved
 
