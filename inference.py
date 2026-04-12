@@ -8,10 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from openai import OpenAI
 
-# =============================================================================
-# READ ENV VARS — read at module level, but DO NOT exit or create client here.
-# app.py imports this module at startup; env vars may not be set yet then.
-# =============================================================================
+
 def _env_base_url() -> str:
     return os.environ.get("API_BASE_URL", "").strip()
 
@@ -23,9 +20,7 @@ def _env_model() -> str:
 
 MODEL_NAME = _env_model()
 
-# =============================================================================
-# LAZY CLIENT — created fresh each call so env vars are always current
-# =============================================================================
+
 _client: Optional[OpenAI] = None
 
 def get_client() -> OpenAI:
@@ -42,9 +37,7 @@ def get_client() -> OpenAI:
         print(f"[CLIENT] Initialized → base_url={base_url} key={'*'*8}", flush=True)
     return _client
 
-# =============================================================================
-# TASKS — fully self-contained, zero dependency on environment.py / models.py
-# =============================================================================
+
 TASKS: List[Dict[str, Any]] = [
     {
         "task_id":   "triage_easy",
