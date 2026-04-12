@@ -19,10 +19,12 @@ tags:
 
 <div align="center">
 
-<img src="https://img.shields.io/badge/Meta_PyTorch_Hackathon-OpenEnv_×_Scaler-blue?style=for-the-badge&logo=meta" />
-<img src="https://img.shields.io/badge/OpenEnv-v0.2_Compliant-green?style=for-the-badge" />
-<img src="https://img.shields.io/badge/Llama_3_70B-RL_Aligned-purple?style=for-the-badge&logo=meta" />
-<img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" />
+[![OpenEnv](https://img.shields.io/badge/OpenEnv-0.2.0-blueviolet?style=for-the-badge&logo=meta)](https://github.com/meta-pytorch/OpenEnv)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://docker.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+[![HuggingFace Space](https://img.shields.io/badge/🤗_Space-Live_Demo-FFD21E?style=for-the-badge)](https://huggingface.co/spaces/samrudh-nux/ClinicalTriageEnv)
 
 # 🏥 ClinicalTriageEnv
 
