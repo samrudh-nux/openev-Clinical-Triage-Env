@@ -138,9 +138,6 @@ class ClinicalTriageEnv:
         resp.raise_for_status()
         return resp.json()
 
-    # ------------------------------------------------------------------ #
-    # Sync wrapper — convenience for non-async callers                     #
-    # ------------------------------------------------------------------ #
 
     def sync(self) -> "_SyncClinicalTriageEnv":
         """Return a synchronous wrapper around this client."""
