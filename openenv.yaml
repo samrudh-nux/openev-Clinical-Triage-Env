@@ -27,9 +27,6 @@ tags:
 
 openenv_spec: "0.2"
 
-# =============================================================================
-# TASKS — 9 tasks × 3 domains × 3 difficulty levels
-# =============================================================================
 tasks:
   # ── Domain 1: Emergency Triage (ESI v4) ───────────────────────────────────
   - id: triage_easy
@@ -162,9 +159,6 @@ tasks:
     key_skills: ["source control", "DIC management", "alternative MRSA coverage", "vasopressor escalation"]
     clinical_protocol: "SSC 2021 + ACCP/SCCM DIC Guidelines + Surgical Infection Society"
 
-# =============================================================================
-# ACTION SPACE
-# =============================================================================
 action_space:
   type: pydantic
   classes:
@@ -196,9 +190,6 @@ action_space:
       clinical_rationale: "str — SSC bundle reasoning (min 50 words)"
       time_to_antibiotics_minutes: "int — Time from presentation to first dose"
 
-# =============================================================================
-# OBSERVATION SPACE
-# =============================================================================
 observation_space:
   type: pydantic
   classes:
@@ -213,9 +204,6 @@ observation_space:
     step: "int — Current episode step"
     done: "bool — Episode complete"
 
-# =============================================================================
-# REWARD FUNCTION
-# =============================================================================
 reward:
   type: continuous
   range: [-1.0, 1.5]
@@ -242,9 +230,6 @@ reward:
     good: 0.75
     excellent: 0.90
 
-# =============================================================================
-# GRADING SYSTEM
-# =============================================================================
 grading:
   type: programmatic
   llm_judge: false
@@ -281,9 +266,6 @@ grading:
       source_control: 0.05
       rationale_depth: 0.15
 
-# =============================================================================
-# EPISODE CONFIGURATION
-# =============================================================================
 episode:
   max_steps: 3
   terminates_on_action: true
@@ -291,9 +273,6 @@ episode:
   passing_threshold: 0.60
   difficulty_progression: ["easy", "medium", "hard"]
 
-# =============================================================================
-# SERVER INFRASTRUCTURE
-# =============================================================================
 server:
   framework: fastapi
   host: "0.0.0.0"
@@ -315,9 +294,6 @@ docker:
   exposed_port: 7860
   build_time_seconds: "<120"
 
-# =============================================================================
-# BASELINE RESULTS — Meta-Llama-3.3-70B-Instruct
-# =============================================================================
 baseline:
   model: "meta-llama/Llama-3.3-70B-Instruct"
   inference_method: "Chain-of-Thought (REASONING: + ACTION: format)"
@@ -337,9 +313,6 @@ baseline:
     Even frontier 70B models fail on hard clinical tasks, demonstrating real
     discriminative power. The benchmark exposes genuine reasoning gaps that
     simple QA datasets cannot surface.
-# =============================================================================
-# REAL-WORLD IMPACT
-# =============================================================================
 real_world_impact:
   domains_covered:
     - "Emergency Medicine: 150M+ ED visits/year globally"
