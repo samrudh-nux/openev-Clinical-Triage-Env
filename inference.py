@@ -194,9 +194,6 @@ TASKS: List[Dict[str, Any]] = [
     },
 ]
 
-# =============================================================================
-# STRUCTURED LOGGING
-# =============================================================================
 
 def emit_start(task_id: str) -> None:
     print(f"[START] task={task_id} model={_env_model()}", flush=True)
@@ -211,9 +208,6 @@ def emit_end(task_id: str, score: float, steps: int, elapsed: float, passed: boo
         flush=True,
     )
 
-# =============================================================================
-# LLM CALL — uses lazy client; safe to call only after env vars are set
-# =============================================================================
 
 def call_llm(system: str, user: str, task_id: str) -> str:
     for attempt in range(3):
@@ -242,9 +236,6 @@ def call_llm(system: str, user: str, task_id: str) -> str:
                 time.sleep(wait)
     return ""
 
-# =============================================================================
-# GRADER
-# =============================================================================
 
 def grade(task: Dict[str, Any], response_text: str) -> float:
     text = response_text.lower()
@@ -256,9 +247,6 @@ def grade(task: Dict[str, Any], response_text: str) -> float:
     score = max(0.0001, min(0.9999, score))
     return round(score, 4)
 
-# =============================================================================
-# SINGLE TASK RUNNER
-# =============================================================================
 
 def run_task(task: Dict[str, Any]) -> Dict[str, Any]:
     task_id = task["task_id"]
@@ -279,9 +267,6 @@ def run_task(task: Dict[str, Any]) -> Dict[str, Any]:
         "elapsed":    round(elapsed, 2),
     }
 
-# =============================================================================
-# MAIN — sys.exit lives HERE only, never at module level
-# =============================================================================
 
 def main() -> None:
     base_url = _env_base_url()
