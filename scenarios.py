@@ -1,9 +1,5 @@
 from models import PatientRecord, VitalSigns, Medication
 
-# 
-# TASK 1: ED TRIAGE SCENARIOS (ESI Level Assignment)
-# Difficulty progression: Easy → Medium → Hard
-# 
 
 TRIAGE_SCENARIOS = {
     "triage_easy_01": {
