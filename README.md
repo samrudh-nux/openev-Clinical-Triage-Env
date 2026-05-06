@@ -18,7 +18,7 @@ tags:
 ---
 ---
 
-## Creator : Samrudh
+## Author : Samrudh
 
 ---
 
